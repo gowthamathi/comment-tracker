@@ -41,6 +41,9 @@
             <header class="main-header">
                 <h1 id="page-title">Dashboard</h1>
                 <div class="header-actions">
+                    <div class="notification-bell" id="settingsBtn" style="margin-right: 16px;">
+                        <i class="fas fa-cog"></i>
+                    </div>
                     <div class="notification-bell" id="notificationBell">
                         <i class="fas fa-bell"></i>
                         <span class="notification-badge" id="notificationBadge">2</span>
@@ -213,61 +216,61 @@
             <!-- Accounts View -->
             <div id="accounts-view" class="view">
                 <div class="accounts-grid">
-                    <div class="account-card">
+                    <div class="account-card" id="facebook-account">
                         <div class="account-header">
                             <i class="fab fa-facebook account-icon facebook"></i>
                             <h3>Facebook</h3>
-                            <span class="status-badge connected">Connected</span>
+                            <span class="status-badge" id="facebook-status">Not Connected</span>
                         </div>
-                        <div class="account-stats">
+                        <div class="account-stats" id="facebook-stats" style="display: none;">
                             <div class="stat">
                                 <span class="stat-label">Comments Today</span>
-                                <span class="stat-value">89</span>
+                                <span class="stat-value" id="facebook-comments-today">0</span>
                             </div>
                             <div class="stat">
                                 <span class="stat-label">Last Sync</span>
-                                <span class="stat-value">2 min ago</span>
+                                <span class="stat-value" id="facebook-last-sync">Never</span>
                             </div>
                         </div>
-                        <button class="btn btn--secondary">Configure</button>
+                        <button class="btn btn--secondary platform-connect-btn" data-platform="facebook" id="facebook-btn">Connect</button>
                     </div>
 
-                    <div class="account-card">
+                    <div class="account-card" id="instagram-account">
                         <div class="account-header">
                             <i class="fab fa-instagram account-icon instagram"></i>
                             <h3>Instagram</h3>
-                            <span class="status-badge connected">Connected</span>
+                            <span class="status-badge" id="instagram-status">Not Connected</span>
                         </div>
-                        <div class="account-stats">
+                        <div class="account-stats" id="instagram-stats" style="display: none;">
                             <div class="stat">
                                 <span class="stat-label">Comments Today</span>
-                                <span class="stat-value">124</span>
+                                <span class="stat-value" id="instagram-comments-today">0</span>
                             </div>
                             <div class="stat">
                                 <span class="stat-label">Last Sync</span>
-                                <span class="stat-value">1 min ago</span>
+                                <span class="stat-value" id="instagram-last-sync">Never</span>
                             </div>
                         </div>
-                        <button class="btn btn--secondary">Configure</button>
+                        <button class="btn btn--secondary platform-connect-btn" data-platform="instagram" id="instagram-btn">Connect</button>
                     </div>
 
-                    <div class="account-card">
+                    <div class="account-card" id="youtube-account">
                         <div class="account-header">
                             <i class="fab fa-youtube account-icon youtube"></i>
                             <h3>YouTube</h3>
-                            <span class="status-badge connected">Connected</span>
+                            <span class="status-badge" id="youtube-status">Not Connected</span>
                         </div>
-                        <div class="account-stats">
+                        <div class="account-stats" id="youtube-stats" style="display: none;">
                             <div class="stat">
                                 <span class="stat-label">Comments Today</span>
-                                <span class="stat-value">34</span>
+                                <span class="stat-value" id="youtube-comments-today">0</span>
                             </div>
                             <div class="stat">
                                 <span class="stat-label">Last Sync</span>
-                                <span class="stat-value">3 min ago</span>
+                                <span class="stat-value" id="youtube-last-sync">Never</span>
                             </div>
                         </div>
-                        <button class="btn btn--secondary">Configure</button>
+                        <button class="btn btn--secondary platform-connect-btn" data-platform="youtube" id="youtube-btn">Connect</button>
                     </div>
                 </div>
             </div>
@@ -319,6 +322,140 @@
         </div>
     </div>
 
+    <!-- Platform Connection Modals -->
+    
+    <!-- Facebook Connection Modal -->
+    <div id="facebookModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Connect Facebook</h3>
+                <button class="modal-close" id="closeFacebookModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Facebook Access Token</label>
+                    <input type="text" class="form-control" id="facebookToken" placeholder="Enter your Facebook access token">
+                    <small style="color: var(--color-text-secondary); font-size: var(--font-size-xs); margin-top: 4px; display: block;">
+                        Get your token from <a href="https://developers.facebook.com/tools/explorer/" target="_blank">Facebook Graph API Explorer</a>
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Page ID</label>
+                    <input type="text" class="form-control" id="facebookPageId" placeholder="Enter your Facebook page ID">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn--secondary" id="cancelFacebook">Cancel</button>
+                <button class="btn btn--primary" id="connectFacebook">Connect</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instagram Connection Modal -->
+    <div id="instagramModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Connect Instagram</h3>
+                <button class="modal-close" id="closeInstagramModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Instagram Access Token</label>
+                    <input type="text" class="form-control" id="instagramToken" placeholder="Enter your Instagram access token">
+                    <small style="color: var(--color-text-secondary); font-size: var(--font-size-xs); margin-top: 4px; display: block;">
+                        Get your token from <a href="https://developers.facebook.com/docs/instagram-basic-display-api" target="_blank">Instagram Basic Display API</a>
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">User ID</label>
+                    <input type="text" class="form-control" id="instagramUserId" placeholder="Enter your Instagram user ID">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn--secondary" id="cancelInstagram">Cancel</button>
+                <button class="btn btn--primary" id="connectInstagram">Connect</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- YouTube Connection Modal -->
+    <div id="youtubeModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Connect YouTube</h3>
+                <button class="modal-close" id="closeYouTubeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">YouTube Access Token</label>
+                    <input type="text" class="form-control" id="youtubeToken" placeholder="Enter your YouTube access token">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Channel ID</label>
+                    <input type="text" class="form-control" id="youtubeChannelId" placeholder="Enter your YouTube channel ID">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">API Key</label>
+                    <input type="text" class="form-control" id="youtubeApiKey" placeholder="Enter your YouTube API key">
+                    <small style="color: var(--color-text-secondary); font-size: var(--font-size-xs); margin-top: 4px; display: block;">
+                        Get your API key from <a href="https://console.developers.google.com/" target="_blank">Google Developer Console</a>
+                    </small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn--secondary" id="cancelYouTube">Cancel</button>
+                <button class="btn btn--primary" id="connectYouTube">Connect</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Settings</h3>
+                <button class="modal-close" id="closeSettingsModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Auto-refresh Comments</label>
+                    <select class="form-control" id="autoRefreshInterval">
+                        <option value="0">Disabled</option>
+                        <option value="30000">30 seconds</option>
+                        <option value="60000" selected>1 minute</option>
+                        <option value="300000">5 minutes</option>
+                        <option value="600000">10 minutes</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Notification Sound</label>
+                    <select class="form-control" id="notificationSound">
+                        <option value="enabled">Enabled</option>
+                        <option value="disabled">Disabled</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button class="btn btn--secondary btn--full-width" id="exportData">Export Data</button>
+                </div>
+                <div class="form-group">
+                    <button class="btn btn--outline btn--full-width" id="clearAllData">Clear All Data</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn--primary" id="saveSettings">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="api.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
