@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supernova Comment Monitor</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h2><i class="fas fa-star"></i> Supernova</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-view="dashboard">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" data-view="comments">
+                    <i class="fas fa-comments"></i>
+                    <span>Comments</span>
+                </a>
+                <a href="#" class="nav-item" data-view="analytics">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Analytics</span>
+                </a>
+                <a href="#" class="nav-item" data-view="accounts">
+                    <i class="fas fa-link"></i>
+                    <span>Accounts</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="main-header">
+                <h1 id="page-title">Dashboard</h1>
+                <div class="header-actions">
+                    <div class="notification-bell" id="notificationBell">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" id="notificationBadge">2</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard View -->
+            <div id="dashboard-view" class="view active">
+                <!-- Metrics Cards -->
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-comments"></i>
+                        </div>
+                        <div class="metric-content">
+                            <h3>Total Comments</h3>
+                            <div class="metric-value">247</div>
+                            <div class="metric-change positive">+15% last 24h</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-reply"></i>
+                        </div>
+                        <div class="metric-content">
+                            <h3>Response Rate</h3>
+                            <div class="metric-value">87%</div>
+                            <div class="metric-change positive">+5% this week</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div class="metric-content">
+                            <h3>Urgent Issues</h3>
+                            <div class="metric-value">8</div>
+                            <div class="metric-change negative">-2 pending</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-smile"></i>
+                        </div>
+                        <div class="metric-content">
+                            <h3>Avg Sentiment</h3>
+                            <div class="metric-value">+0.2</div>
+                            <div class="metric-change positive">+0.1 this week</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Comments Feed -->
+                <div class="dashboard-section">
+                    <h3>Recent Comments</h3>
+                    <div class="comments-feed" id="recentCommentsFeed">
+                        <!-- Comments will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Notifications Panel -->
+                <div class="dashboard-section">
+                    <h3>Recent Notifications</h3>
+                    <div class="notifications-list" id="notificationsList">
+                        <!-- Notifications will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comments View -->
+            <div id="comments-view" class="view">
+                <!-- Filters and Search -->
+                <div class="filters-section">
+                    <div class="filter-group">
+                        <button class="filter-btn active" data-filter="all">All</button>
+                        <button class="filter-btn" data-filter="urgent">Urgent</button>
+                        <button class="filter-btn" data-filter="unresponded">Unresponded</button>
+                        <button class="filter-btn" data-filter="refunds">Refunds</button>
+                    </div>
+                    <div class="search-group">
+                        <input type="text" class="form-control" id="commentSearch" placeholder="Search comments...">
+                        <i class="fas fa-search search-icon"></i>
+                    </div>
+                </div>
+
+                <!-- Platform Filters -->
+                <div class="platform-filters">
+                    <button class="platform-filter active" data-platform="all">
+                        <i class="fas fa-globe"></i> All Platforms
+                    </button>
+                    <button class="platform-filter" data-platform="facebook">
+                        <i class="fab fa-facebook"></i> Facebook
+                    </button>
+                    <button class="platform-filter" data-platform="instagram">
+                        <i class="fab fa-instagram"></i> Instagram
+                    </button>
+                    <button class="platform-filter" data-platform="youtube">
+                        <i class="fab fa-youtube"></i> YouTube
+                    </button>
+                </div>
+
+                <!-- Comments Table -->
+                <div class="comments-table">
+                    <div class="table-header">
+                        <div class="table-cell">Platform</div>
+                        <div class="table-cell">Comment</div>
+                        <div class="table-cell">Sentiment</div>
+                        <div class="table-cell">Category</div>
+                        <div class="table-cell">Priority</div>
+                        <div class="table-cell">Time</div>
+                        <div class="table-cell">Status</div>
+                        <div class="table-cell">Actions</div>
+                    </div>
+                    <div class="table-body" id="commentsTableBody">
+                        <!-- Comments will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics View -->
+            <div id="analytics-view" class="view">
+                <div class="analytics-controls">
+                    <select class="form-control" id="dateRange">
+                        <option value="7">Last 7 days</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="90">Last 90 days</option>
+                    </select>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-container">
+                        <h3>Comment Volume Trends</h3>
+                        <div style="position: relative; height: 300px;">
+                            <canvas id="trendsChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Sentiment Distribution</h3>
+                        <div style="position: relative; height: 300px;">
+                            <canvas id="sentimentChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Platform Breakdown</h3>
+                        <div style="position: relative; height: 300px;">
+                            <canvas id="platformChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h3>Response Time Metrics</h3>
+                        <div class="response-metrics">
+                            <div class="metric-item">
+                                <span class="metric-label">Average Response Time</span>
+                                <span class="metric-number">2.3 hours</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Fastest Response</span>
+                                <span class="metric-number">12 minutes</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Slowest Response</span>
+                                <span class="metric-number">8.5 hours</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Accounts View -->
+            <div id="accounts-view" class="view">
+                <div class="accounts-grid">
+                    <div class="account-card">
+                        <div class="account-header">
+                            <i class="fab fa-facebook account-icon facebook"></i>
+                            <h3>Facebook</h3>
+                            <span class="status-badge connected">Connected</span>
+                        </div>
+                        <div class="account-stats">
+                            <div class="stat">
+                                <span class="stat-label">Comments Today</span>
+                                <span class="stat-value">89</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Last Sync</span>
+                                <span class="stat-value">2 min ago</span>
+                            </div>
+                        </div>
+                        <button class="btn btn--secondary">Configure</button>
+                    </div>
+
+                    <div class="account-card">
+                        <div class="account-header">
+                            <i class="fab fa-instagram account-icon instagram"></i>
+                            <h3>Instagram</h3>
+                            <span class="status-badge connected">Connected</span>
+                        </div>
+                        <div class="account-stats">
+                            <div class="stat">
+                                <span class="stat-label">Comments Today</span>
+                                <span class="stat-value">124</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Last Sync</span>
+                                <span class="stat-value">1 min ago</span>
+                            </div>
+                        </div>
+                        <button class="btn btn--secondary">Configure</button>
+                    </div>
+
+                    <div class="account-card">
+                        <div class="account-header">
+                            <i class="fab fa-youtube account-icon youtube"></i>
+                            <h3>YouTube</h3>
+                            <span class="status-badge connected">Connected</span>
+                        </div>
+                        <div class="account-stats">
+                            <div class="stat">
+                                <span class="stat-label">Comments Today</span>
+                                <span class="stat-value">34</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-label">Last Sync</span>
+                                <span class="stat-value">3 min ago</span>
+                            </div>
+                        </div>
+                        <button class="btn btn--secondary">Configure</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Response Modal -->
+    <div id="responseModal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Respond to Comment</h3>
+                <button class="modal-close" id="closeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="comment-thread">
+                    <div class="original-comment" id="originalComment">
+                        <!-- Original comment will be displayed here -->
+                    </div>
+                </div>
+                <div class="response-form">
+                    <label class="form-label">Your Response</label>
+                    <textarea class="form-control" id="responseText" rows="4" placeholder="Type your response..."></textarea>
+                    <div class="template-suggestions">
+                        <button class="btn btn--sm btn--outline template-btn" data-template="thanks">Thank you for your feedback</button>
+                        <button class="btn btn--sm btn--outline template-btn" data-template="sorry">We apologize for the inconvenience</button>
+                        <button class="btn btn--sm btn--outline template-btn" data-template="help">We're here to help</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn--secondary" id="cancelResponse">Cancel</button>
+                <button class="btn btn--primary" id="sendResponse">Send Response</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Panel -->
+    <div id="notificationPanel" class="notification-panel hidden">
+        <div class="notification-header">
+            <h3>Notifications</h3>
+            <button class="notification-close" id="closeNotifications">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="notification-content" id="notificationContent">
+            <!-- Notifications will be populated by JavaScript -->
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
