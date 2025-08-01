@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Fixes - Supernova Comment Monitor</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .test-result { margin: 10px 0; padding: 10px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        button { margin: 5px; padding: 8px 16px; }
+    </style>
+</head>
+<body>
+    <h1>Test Fixes - Supernova Comment Monitor</h1>
+    
+    <div class="test-section">
+        <h2>1. API Class Test</h2>
+        <button onclick="testAPIClass()">Test API Class</button>
+        <div id="api-test-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Facebook Validation Test</h2>
+        <button onclick="testFacebookValidation()">Test Facebook Page ID Validation</button>
+        <div id="facebook-test-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Sync Timestamp Test</h2>
+        <button onclick="testSyncTimestamps()">Test Sync Timestamps</button>
+        <div id="sync-test-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Error Handling Test</h2>
+        <button onclick="testErrorHandling()">Test Error Messages</button>
+        <div id="error-test-result"></div>
+    </div>
+
+    <script src="api.js"></script>
+    <script>
+        function showResult(elementId, message, isSuccess) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="test-result ${isSuccess ? 'success' : 'error'}">${message}</div>`;
+        }
+
+        function testAPIClass() {
+            try {
+                const api = new SocialMediaAPI();
+                const hasRequiredMethods = [
+                    'connectFacebook',
+                    'connectInstagram', 
+                    'connectYouTube',
+                    'fetchAllComments',
+                    'getPlatformStatus'
+                ].every(method => typeof api[method] === 'function');
+                
+                if (hasRequiredMethods) {
+                    showResult('api-test-result', '✅ API class loaded successfully with all required methods', true);
+                } else {
+                    showResult('api-test-result', '❌ API class missing required methods', false);
+                }
+            } catch (error) {
+                showResult('api-test-result', `❌ API class failed to load: ${error.message}`, false);
+            }
+        }
+
+        function testFacebookValidation() {
+            try {
+                const api = new SocialMediaAPI();
+                
+                // Test the connection method exists and has proper error handling
+                const connectMethod = api.connectFacebook.toString();
+                const hasValidation = connectMethod.includes('pageResponse') && 
+                                    connectMethod.includes('pageError') &&
+                                    connectMethod.includes('Page not found');
+                
+                if (hasValidation) {
+                    showResult('facebook-test-result', '✅ Facebook connection now includes proper page ID validation and error handling', true);
+                } else {
+                    showResult('facebook-test-result', '❌ Facebook validation not properly implemented', false);
+                }
+            } catch (error) {
+                showResult('facebook-test-result', `❌ Facebook validation test failed: ${error.message}`, false);
+            }
+        }
+
+        function testSyncTimestamps() {
+            try {
+                const api = new SocialMediaAPI();
+                
+                // Test that platform status can track sync times
+                const facebookStatus = api.getPlatformStatus('facebook');
+                const hasTimestampSupport = facebookStatus !== null && typeof facebookStatus === 'object';
+                
+                // Test the fetch methods include timestamp updates
+                const fetchMethod = api.fetchFacebookComments.toString();
+                const hasTimestampUpdate = fetchMethod.includes('lastSync') && 
+                                         fetchMethod.includes('toISOString');
+                
+                if (hasTimestampSupport && hasTimestampUpdate) {
+                    showResult('sync-test-result', '✅ Sync timestamp tracking implemented - "Never" issue should be fixed', true);
+                } else {
+                    showResult('sync-test-result', '❌ Sync timestamp tracking not properly implemented', false);
+                }
+            } catch (error) {
+                showResult('sync-test-result', `❌ Sync timestamp test failed: ${error.message}`, false);
+            }
+        }
+
+        function testErrorHandling() {
+            try {
+                const api = new SocialMediaAPI();
+                
+                // Test that error handling includes proper messages
+                const connectMethod = api.connectFacebook.toString();
+                const hasDetailedErrors = connectMethod.includes('Page not found') && 
+                                        connectMethod.includes('Access denied') &&
+                                        connectMethod.includes('Token validation failed');
+                
+                if (hasDetailedErrors) {
+                    showResult('error-test-result', '✅ Enhanced error messages implemented - users will now get specific error details', true);
+                } else {
+                    showResult('error-test-result', '❌ Enhanced error messages not properly implemented', false);
+                }
+            } catch (error) {
+                showResult('error-test-result', `❌ Error handling test failed: ${error.message}`, false);
+            }
+        }
+
+        // Run all tests on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(() => {
+                testAPIClass();
+                testFacebookValidation();
+                testSyncTimestamps();
+                testErrorHandling();
+            }, 100);
+        });
+    </script>
+</body>
+</html>

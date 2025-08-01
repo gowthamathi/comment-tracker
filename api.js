@@ -46,64 +46,166 @@ class SocialMediaAPI {
   // Facebook Integration
   async connectFacebook(accessToken, pageId) {
     try {
-      // Validate token by making a test request
-      const response = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${accessToken}`);
+      console.log('Attempting Facebook connection with token and page ID...');
       
-      if (response.ok) {
-        this.platforms.facebook.connected = true;
-        this.platforms.facebook.accessToken = accessToken;
-        this.platforms.facebook.pageId = pageId;
-        this.saveCredentials();
-        return { success: true, message: 'Facebook connected successfully!' };
-      } else {
-        throw new Error('Invalid Facebook access token');
+      // First validate the access token
+      const tokenResponse = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${accessToken}`);
+      
+      if (!tokenResponse.ok) {
+        const tokenError = await tokenResponse.json().catch(() => ({}));
+        console.error('Facebook token validation failed:', tokenError);
+        throw new Error(`Invalid Facebook access token: ${tokenError.error?.message || 'Token validation failed'}`);
       }
+      
+      // Validate the page ID and access permissions
+      const pageResponse = await fetch(`https://graph.facebook.com/v18.0/${pageId}?fields=id,name,access_token&access_token=${accessToken}`);
+      
+      if (!pageResponse.ok) {
+        const pageError = await pageResponse.json().catch(() => ({}));
+        console.error('Facebook page validation failed:', pageError);
+        
+        if (pageResponse.status === 404) {
+          throw new Error('Facebook page not found. Please check your Page ID.');
+        } else if (pageResponse.status === 403) {
+          throw new Error('Access denied to Facebook page. Please ensure you have admin access and the correct permissions.');
+        } else {
+          throw new Error(`Facebook page validation failed: ${pageError.error?.message || 'Unable to access page'}`);
+        }
+      }
+      
+      const pageData = await pageResponse.json();
+      console.log('Facebook page validation successful:', pageData.name);
+      
+      // Test fetching comments to ensure we have the right permissions
+      try {
+        const testResponse = await fetch(`https://graph.facebook.com/v18.0/${pageId}/feed?fields=comments.limit(1)&access_token=${accessToken}`);
+        if (!testResponse.ok) {
+          const testError = await testResponse.json().catch(() => ({}));
+          console.warn('Facebook comments test failed:', testError);
+          throw new Error('Unable to access Facebook page comments. Please ensure your access token has the required permissions (pages_read_engagement, pages_manage_posts).');
+        }
+      } catch (permError) {
+        console.error('Facebook permissions test failed:', permError);
+        throw permError;
+      }
+      
+      this.platforms.facebook.connected = true;
+      this.platforms.facebook.accessToken = accessToken;
+      this.platforms.facebook.pageId = pageId;
+      this.platforms.facebook.lastSync = new Date().toISOString();
+      this.saveCredentials();
+      
+      console.log('Facebook connected successfully');
+      return { success: true, message: `Facebook connected successfully! Page: ${pageData.name}` };
     } catch (error) {
       console.error('Facebook connection error:', error);
-      return { success: false, message: 'Failed to connect Facebook: ' + error.message };
+      this.platforms.facebook.connected = false;
+      this.platforms.facebook.accessToken = null;
+      this.platforms.facebook.pageId = null;
+      this.saveCredentials();
+      return { success: false, message: error.message };
     }
   }
 
   // Instagram Integration
   async connectInstagram(accessToken, userId) {
     try {
-      // Validate token by making a test request
-      const response = await fetch(`https://graph.instagram.com/v18.0/me?access_token=${accessToken}`);
+      console.log('Attempting Instagram connection...');
       
-      if (response.ok) {
-        this.platforms.instagram.connected = true;
-        this.platforms.instagram.accessToken = accessToken;
-        this.platforms.instagram.userId = userId;
-        this.saveCredentials();
-        return { success: true, message: 'Instagram connected successfully!' };
-      } else {
-        throw new Error('Invalid Instagram access token');
+      // Validate token and user ID
+      const response = await fetch(`https://graph.instagram.com/v18.0/${userId}?fields=id,username&access_token=${accessToken}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Instagram validation failed:', errorData);
+        
+        if (response.status === 404) {
+          throw new Error('Instagram user not found. Please check your User ID.');
+        } else if (response.status === 403) {
+          throw new Error('Access denied to Instagram account. Please ensure you have the correct permissions.');
+        } else {
+          throw new Error(`Instagram validation failed: ${errorData.error?.message || 'Invalid credentials'}`);
+        }
       }
+      
+      const userData = await response.json();
+      console.log('Instagram validation successful:', userData.username);
+      
+      this.platforms.instagram.connected = true;
+      this.platforms.instagram.accessToken = accessToken;
+      this.platforms.instagram.userId = userId;
+      this.platforms.instagram.lastSync = new Date().toISOString();
+      this.saveCredentials();
+      
+      return { success: true, message: `Instagram connected successfully! Account: @${userData.username}` };
     } catch (error) {
       console.error('Instagram connection error:', error);
-      return { success: false, message: 'Failed to connect Instagram: ' + error.message };
+      this.platforms.instagram.connected = false;
+      this.platforms.instagram.accessToken = null;
+      this.platforms.instagram.userId = null;
+      this.saveCredentials();
+      return { success: false, message: error.message };
     }
   }
 
   // YouTube Integration
   async connectYouTube(accessToken, channelId, apiKey) {
     try {
-      // Validate token by making a test request
-      const response = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true&access_token=${accessToken}&key=${apiKey}`);
+      console.log('Attempting YouTube connection...');
       
-      if (response.ok) {
-        this.platforms.youtube.connected = true;
-        this.platforms.youtube.accessToken = accessToken;
-        this.platforms.youtube.channelId = channelId;
-        this.platforms.youtube.apiKey = apiKey;
-        this.saveCredentials();
-        return { success: true, message: 'YouTube connected successfully!' };
-      } else {
-        throw new Error('Invalid YouTube credentials');
+      // Validate the channel ID first
+      const channelResponse = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${channelId}&key=${apiKey}`);
+      
+      if (!channelResponse.ok) {
+        const channelError = await channelResponse.json().catch(() => ({}));
+        console.error('YouTube channel validation failed:', channelError);
+        throw new Error(`Invalid YouTube API key or channel ID: ${channelError.error?.message || 'Channel not found'}`);
       }
+      
+      const channelData = await channelResponse.json();
+      if (!channelData.items || channelData.items.length === 0) {
+        throw new Error('YouTube channel not found. Please check your Channel ID.');
+      }
+      
+      // Validate access token with the specific channel
+      const authResponse = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true&access_token=${accessToken}&key=${apiKey}`);
+      
+      if (!authResponse.ok) {
+        const authError = await authResponse.json().catch(() => ({}));
+        console.error('YouTube token validation failed:', authError);
+        
+        if (authResponse.status === 401) {
+          throw new Error('Invalid or expired YouTube access token. Please re-authenticate.');
+        } else {
+          throw new Error(`YouTube authentication failed: ${authError.error?.message || 'Invalid token'}`);
+        }
+      }
+      
+      const authData = await authResponse.json();
+      const userChannel = authData.items?.[0];
+      
+      if (!userChannel || userChannel.id !== channelId) {
+        throw new Error('The provided Channel ID does not match your authenticated YouTube account.');
+      }
+      
+      console.log('YouTube validation successful:', channelData.items[0].snippet.title);
+      
+      this.platforms.youtube.connected = true;
+      this.platforms.youtube.accessToken = accessToken;
+      this.platforms.youtube.channelId = channelId;
+      this.platforms.youtube.apiKey = apiKey;
+      this.platforms.youtube.lastSync = new Date().toISOString();
+      this.saveCredentials();
+      
+      return { success: true, message: `YouTube connected successfully! Channel: ${channelData.items[0].snippet.title}` };
     } catch (error) {
       console.error('YouTube connection error:', error);
-      return { success: false, message: 'Failed to connect YouTube: ' + error.message };
+      this.platforms.youtube.connected = false;
+      this.platforms.youtube.accessToken = null;
+      this.platforms.youtube.channelId = null;
+      this.platforms.youtube.apiKey = null;
+      this.saveCredentials();
+      return { success: false, message: error.message };
     }
   }
 
@@ -129,17 +231,43 @@ class SocialMediaAPI {
     }
 
     try {
+      console.log('Fetching Facebook comments...');
       const { accessToken, pageId } = this.platforms.facebook;
+      
       const response = await fetch(`https://graph.facebook.com/v18.0/${pageId}/feed?fields=comments{message,from,created_time,id}&access_token=${accessToken}`);
       
       if (!response.ok) {
-        throw new Error(`Facebook API error: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Facebook API error:', errorData);
+        
+        if (response.status === 401) {
+          this.platforms.facebook.connected = false;
+          this.saveCredentials();
+          throw new Error('Facebook access token expired. Please reconnect your account.');
+        } else if (response.status === 403) {
+          throw new Error('Access denied to Facebook page. Please check your permissions.');
+        } else if (response.status === 404) {
+          throw new Error('Facebook page not found. Please check your Page ID.');
+        } else {
+          throw new Error(`Facebook API error: ${errorData.error?.message || response.status}`);
+        }
       }
 
       const data = await response.json();
+      console.log(`Facebook sync successful: found ${data.data?.length || 0} posts`);
+      
+      // Update last sync time
+      this.platforms.facebook.lastSync = new Date().toISOString();
+      this.saveCredentials();
+      
       return this.formatFacebookComments(data);
     } catch (error) {
       console.error('Error fetching Facebook comments:', error);
+      
+      // Update last sync attempt time even on failure
+      this.platforms.facebook.lastSyncAttempt = new Date().toISOString();
+      this.saveCredentials();
+      
       throw error;
     }
   }
@@ -151,17 +279,41 @@ class SocialMediaAPI {
     }
 
     try {
+      console.log('Fetching Instagram comments...');
       const { accessToken, userId } = this.platforms.instagram;
+      
       const response = await fetch(`https://graph.instagram.com/v18.0/${userId}/media?fields=comments{text,username,timestamp,id}&access_token=${accessToken}`);
       
       if (!response.ok) {
-        throw new Error(`Instagram API error: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Instagram API error:', errorData);
+        
+        if (response.status === 401) {
+          this.platforms.instagram.connected = false;
+          this.saveCredentials();
+          throw new Error('Instagram access token expired. Please reconnect your account.');
+        } else if (response.status === 403) {
+          throw new Error('Access denied to Instagram account. Please check your permissions.');
+        } else {
+          throw new Error(`Instagram API error: ${errorData.error?.message || response.status}`);
+        }
       }
 
       const data = await response.json();
+      console.log(`Instagram sync successful: found ${data.data?.length || 0} media posts`);
+      
+      // Update last sync time
+      this.platforms.instagram.lastSync = new Date().toISOString();
+      this.saveCredentials();
+      
       return this.formatInstagramComments(data);
     } catch (error) {
       console.error('Error fetching Instagram comments:', error);
+      
+      // Update last sync attempt time even on failure
+      this.platforms.instagram.lastSyncAttempt = new Date().toISOString();
+      this.saveCredentials();
+      
       throw error;
     }
   }
@@ -173,17 +325,48 @@ class SocialMediaAPI {
     }
 
     try {
+      console.log('Fetching YouTube comments...');
       const { accessToken, channelId, apiKey } = this.platforms.youtube;
+      
       const response = await fetch(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&allThreadsRelatedToChannelId=${channelId}&access_token=${accessToken}&key=${apiKey}`);
       
       if (!response.ok) {
-        throw new Error(`YouTube API error: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('YouTube API error:', errorData);
+        
+        if (response.status === 401) {
+          this.platforms.youtube.connected = false;
+          this.saveCredentials();
+          throw new Error('YouTube access token expired. Please reconnect your account.');
+        } else if (response.status === 403) {
+          const errorReason = errorData.error?.errors?.[0]?.reason;
+          if (errorReason === 'commentsDisabled') {
+            throw new Error('Comments are disabled for this YouTube channel.');
+          } else if (errorReason === 'quotaExceeded') {
+            throw new Error('YouTube API quota exceeded. Please try again later.');
+          } else {
+            throw new Error('Access denied to YouTube comments. Please check your permissions.');
+          }
+        } else {
+          throw new Error(`YouTube API error: ${errorData.error?.message || response.status}`);
+        }
       }
 
       const data = await response.json();
+      console.log(`YouTube sync successful: found ${data.items?.length || 0} comment threads`);
+      
+      // Update last sync time
+      this.platforms.youtube.lastSync = new Date().toISOString();
+      this.saveCredentials();
+      
       return this.formatYouTubeComments(data);
     } catch (error) {
       console.error('Error fetching YouTube comments:', error);
+      
+      // Update last sync attempt time even on failure
+      this.platforms.youtube.lastSyncAttempt = new Date().toISOString();
+      this.saveCredentials();
+      
       throw error;
     }
   }

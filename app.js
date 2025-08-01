@@ -21,10 +21,18 @@ class SupernovaApp {
 
   // Initialize the application
   init() {
-    this.setupEventListeners();
-    this.updatePlatformStatus();
-    this.refreshDashboard();
-    this.setupAutoRefresh();
+    console.log('Initializing Supernova Comment Monitor...');
+    try {
+      this.setupEventListeners();
+      this.updatePlatformStatus();
+      this.refreshDashboard();
+      this.setupAutoRefresh();
+      this.addGlobalErrorHandlers();
+      console.log('Application initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize application:', error);
+      this.showToast('Failed to initialize application: ' + error.message, 'error');
+    }
   }
 
   // Load settings from localStorage
@@ -266,7 +274,16 @@ class SupernovaApp {
 
   // Connect platform
   async connectPlatform(platform) {
+    const connectBtn = document.getElementById(`connect${platform.charAt(0).toUpperCase() + platform.slice(1)}`);
+    const originalBtnText = connectBtn?.textContent;
+    
     try {
+      // Show loading state
+      if (connectBtn) {
+        connectBtn.textContent = 'Connecting...';
+        connectBtn.disabled = true;
+      }
+      
       let result;
       
       switch (platform) {
@@ -274,11 +291,22 @@ class SupernovaApp {
           const fbToken = document.getElementById('facebookToken').value.trim();
           const fbPageId = document.getElementById('facebookPageId').value.trim();
           
-          if (!fbToken || !fbPageId) {
-            this.showToast('Please fill in all Facebook credentials', 'error');
+          if (!fbToken) {
+            this.showToast('Please enter your Facebook access token', 'error');
+            return;
+          }
+          if (!fbPageId) {
+            this.showToast('Please enter your Facebook Page ID', 'error');
             return;
           }
           
+          // Validate Page ID format
+          if (!/^\d+$/.test(fbPageId)) {
+            this.showToast('Facebook Page ID should only contain numbers', 'error');
+            return;
+          }
+          
+          console.log('Attempting Facebook connection...');
           result = await this.api.connectFacebook(fbToken, fbPageId);
           break;
           
@@ -286,11 +314,16 @@ class SupernovaApp {
           const igToken = document.getElementById('instagramToken').value.trim();
           const igUserId = document.getElementById('instagramUserId').value.trim();
           
-          if (!igToken || !igUserId) {
-            this.showToast('Please fill in all Instagram credentials', 'error');
+          if (!igToken) {
+            this.showToast('Please enter your Instagram access token', 'error');
+            return;
+          }
+          if (!igUserId) {
+            this.showToast('Please enter your Instagram User ID', 'error');
             return;
           }
           
+          console.log('Attempting Instagram connection...');
           result = await this.api.connectInstagram(igToken, igUserId);
           break;
           
@@ -299,11 +332,20 @@ class SupernovaApp {
           const ytChannelId = document.getElementById('youtubeChannelId').value.trim();
           const ytApiKey = document.getElementById('youtubeApiKey').value.trim();
           
-          if (!ytToken || !ytChannelId || !ytApiKey) {
-            this.showToast('Please fill in all YouTube credentials', 'error');
+          if (!ytToken) {
+            this.showToast('Please enter your YouTube access token', 'error');
+            return;
+          }
+          if (!ytChannelId) {
+            this.showToast('Please enter your YouTube Channel ID', 'error');
+            return;
+          }
+          if (!ytApiKey) {
+            this.showToast('Please enter your YouTube API key', 'error');
             return;
           }
           
+          console.log('Attempting YouTube connection...');
           result = await this.api.connectYouTube(ytToken, ytChannelId, ytApiKey);
           break;
       }
@@ -312,25 +354,41 @@ class SupernovaApp {
         this.showToast(result.message, 'success');
         this.hideModal(`${platform}Modal`);
         this.updatePlatformStatus();
-        this.refreshComments();
+        // Clear form fields on successful connection
+        this.clearConnectionForm(platform);
+        // Trigger initial sync
+        setTimeout(() => this.refreshComments(), 1000);
       } else {
         this.showToast(result.message, 'error');
       }
     } catch (error) {
       console.error('Connection error:', error);
-      this.showToast('Connection failed: ' + error.message, 'error');
+      this.showToast('Connection failed: ' + (error.message || 'Unknown error occurred'), 'error');
+    } finally {
+      // Restore button state
+      if (connectBtn) {
+        connectBtn.textContent = originalBtnText;
+        connectBtn.disabled = false;
+      }
     }
   }
 
   // Disconnect platform
   disconnectPlatform(platform) {
-    const result = this.api.disconnectPlatform(platform);
-    if (result.success) {
-      this.showToast(result.message, 'success');
-      this.updatePlatformStatus();
-      this.refreshComments();
-    } else {
-      this.showToast(result.message, 'error');
+    if (confirm(`Are you sure you want to disconnect ${platform.charAt(0).toUpperCase() + platform.slice(1)}? This will stop syncing comments from this platform.`)) {
+      console.log(`Disconnecting ${platform}...`);
+      const result = this.api.disconnectPlatform(platform);
+      if (result.success) {
+        this.showToast(result.message, 'success');
+        this.updatePlatformStatus();
+        // Remove comments from disconnected platform
+        this.comments = this.comments.filter(comment => comment.platform !== platform);
+        this.saveComments();
+        this.applyFilters();
+        this.refreshDashboard();
+      } else {
+        this.showToast(result.message, 'error');
+      }
     }
   }
 
@@ -412,6 +470,17 @@ class SupernovaApp {
 
   // Refresh comments from all connected platforms
   async refreshComments() {
+    console.log('Starting comment refresh...');
+    const connectedPlatforms = this.api.getConnectedPlatforms();
+    
+    if (connectedPlatforms.length === 0) {
+      this.showToast('No platforms connected. Please connect your social media accounts first.', 'warning');
+      return;
+    }
+    
+    let totalNewComments = 0;
+    let syncErrors = [];
+    
     try {
       const newComments = await this.api.fetchAllComments();
       
@@ -420,6 +489,7 @@ class SupernovaApp {
         const exists = this.comments.find(existing => existing.id === newComment.id);
         if (!exists) {
           this.comments.unshift(newComment);
+          totalNewComments++;
         }
       });
       
@@ -436,12 +506,19 @@ class SupernovaApp {
       this.refreshDashboard();
       this.updateNotificationBadge();
       
-      if (newComments.length > 0) {
-        this.showToast(`Fetched ${newComments.length} new comments`, 'success');
+      if (totalNewComments > 0) {
+        this.showToast(`Fetched ${totalNewComments} new comments`, 'success');
+      } else {
+        this.showToast('Sync completed - no new comments found', 'info');
       }
+      
+      console.log(`Comment refresh completed. New comments: ${totalNewComments}`);
     } catch (error) {
       console.error('Error refreshing comments:', error);
-      this.showToast('Failed to refresh comments: ' + error.message, 'error');
+      this.showToast('Sync failed: ' + error.message, 'error');
+      
+      // Still refresh the dashboard to show updated sync times
+      this.refreshDashboard();
     }
   }
 
@@ -605,8 +682,19 @@ class SupernovaApp {
       const syncElement = document.getElementById(`${platform}-last-sync`);
       
       if (countElement) countElement.textContent = todayComments.length;
-      if (syncElement && todayComments.length > 0) {
-        syncElement.textContent = this.formatTimeAgo(Math.max(...todayComments.map(c => new Date(c.timestamp))));
+      
+      // Get last sync time from API platform data
+      const platformStatus = this.api.getPlatformStatus(platform);
+      if (syncElement) {
+        if (platformStatus.lastSync) {
+          syncElement.textContent = this.formatTimeAgo(platformStatus.lastSync);
+        } else if (platformStatus.lastSyncAttempt) {
+          syncElement.textContent = `Failed: ${this.formatTimeAgo(platformStatus.lastSyncAttempt)}`;
+          syncElement.style.color = 'var(--color-error)';
+        } else {
+          syncElement.textContent = 'Never';
+          syncElement.style.color = 'var(--color-text-secondary)';
+        }
       }
     });
   }
@@ -1109,31 +1197,178 @@ class SupernovaApp {
   }
 
   showToast(message, type = 'info') {
+    // Remove any existing toasts to prevent stacking
+    const existingToasts = document.querySelectorAll('.toast');
+    existingToasts.forEach(toast => toast.remove());
+    
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.textContent = message;
+    
+    // Add icon based on type
+    const icons = {
+      success: 'fas fa-check-circle',
+      error: 'fas fa-exclamation-circle',
+      warning: 'fas fa-exclamation-triangle',
+      info: 'fas fa-info-circle'
+    };
+    
+    toast.innerHTML = `
+      <i class="${icons[type] || icons.info}" style="margin-right: 8px;"></i>
+      <span>${message}</span>
+    `;
+    
+    const colors = {
+      success: '#10B981',
+      error: '#EF4444',
+      warning: '#F59E0B',
+      info: '#3B82F6'
+    };
+    
     toast.style.cssText = `
       position: fixed;
       top: 20px;
       right: 20px;
-      padding: 12px 20px;
-      background: var(--color-${type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'success'});
+      padding: 12px 16px;
+      background: ${colors[type] || colors.info};
       color: white;
-      border-radius: 6px;
+      border-radius: 8px;
       z-index: 10000;
       animation: slideIn 0.3s ease;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      min-width: 300px;
+      max-width: 500px;
+      font-size: 14px;
+      font-weight: 500;
     `;
     
     document.body.appendChild(toast);
     
+    // Auto-remove after longer time for errors
+    const duration = type === 'error' ? 5000 : 3000;
     setTimeout(() => {
-      toast.remove();
-    }, 3000);
+      if (toast.parentNode) {
+        toast.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }
+    }, duration);
+    
+    // Click to dismiss
+    toast.addEventListener('click', () => {
+      if (toast.parentNode) {
+        toast.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }
+    });
+  }
+
+  // Clear connection form fields
+  clearConnectionForm(platform) {
+    switch (platform) {
+      case 'facebook':
+        document.getElementById('facebookToken').value = '';
+        document.getElementById('facebookPageId').value = '';
+        break;
+      case 'instagram':
+        document.getElementById('instagramToken').value = '';
+        document.getElementById('instagramUserId').value = '';
+        break;
+      case 'youtube':
+        document.getElementById('youtubeToken').value = '';
+        document.getElementById('youtubeChannelId').value = '';
+        document.getElementById('youtubeApiKey').value = '';
+        break;
+    }
+  }
+
+  // Add global error handlers
+  addGlobalErrorHandlers() {
+    // Handle unhandled promise rejections
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      this.showToast('An unexpected error occurred: ' + (event.reason?.message || 'Unknown error'), 'error');
+      event.preventDefault();
+    });
+
+    // Handle JavaScript errors
+    window.addEventListener('error', (event) => {
+      console.error('JavaScript error:', event.error);
+      if (event.error?.message) {
+        this.showToast('Application error: ' + event.error.message, 'error');
+      }
+    });
+
+    // Handle network connection issues
+    window.addEventListener('online', () => {
+      console.log('Network connection restored');
+      this.showToast('Internet connection restored', 'success');
+    });
+
+    window.addEventListener('offline', () => {
+      console.log('Network connection lost');
+      this.showToast('Internet connection lost. Some features may not work.', 'warning');
+    });
   }
 }
 
+// Add CSS animations for toasts
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes slideIn {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+  
+  @keyframes slideOut {
+    from {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+  }
+  
+  .toast {
+    cursor: pointer;
+    transition: transform 0.2s ease;
+  }
+  
+  .toast:hover {
+    transform: translateX(-5px);
+  }
+`;
+document.head.appendChild(style);
+
 // Initialize the application when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-  window.app = new SupernovaApp();
+  try {
+    window.app = new SupernovaApp();
+  } catch (error) {
+    console.error('Failed to initialize Supernova app:', error);
+    // Show error even if app fails to initialize
+    const errorToast = document.createElement('div');
+    errorToast.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 16px;
+      background: #EF4444;
+      color: white;
+      border-radius: 8px;
+      z-index: 10000;
+      font-size: 14px;
+      font-weight: 500;
+    `;
+    errorToast.innerHTML = `<i class="fas fa-exclamation-circle" style="margin-right: 8px;"></i>Failed to start application: ${error.message}`;
+    document.body.appendChild(errorToast);
+  }
 });
