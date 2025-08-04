@@ -142,12 +142,30 @@ class SocialMediaAPI {
         throw new Error(`Invalid access token: ${userError.error?.message || 'Token validation failed'}`);
       }
       
+      // First check what type of token this is and what permissions it has
+      const tokenInfoResponse = await fetch(`https://graph.facebook.com/v18.0/me?fields=id,name&access_token=${accessToken}`);
+      const tokenInfo = await tokenInfoResponse.json();
+      
+      if (tokenInfo.error) {
+        console.error('Token info error:', tokenInfo.error);
+        throw new Error(`Token validation failed: ${tokenInfo.error.message}`);
+      }
+      
+      console.log('Token belongs to:', tokenInfo.name, 'ID:', tokenInfo.id);
+      
       // Get Instagram Business accounts connected to this Facebook account
+      // Note: This requires a User Access Token with pages_manage_metadata permission
       const pagesResponse = await fetch(`https://graph.facebook.com/v18.0/me/accounts?fields=id,name,instagram_business_account{id,username,name,profile_picture_url}&access_token=${accessToken}`);
       
       if (!pagesResponse.ok) {
         const pagesError = await pagesResponse.json().catch(() => ({}));
         console.error('Pages fetch failed:', pagesError);
+        
+        // Provide more specific error messages
+        if (pagesError.error?.code === 100 && pagesError.error?.message?.includes('nonexisting field (accounts)')) {
+          throw new Error('This appears to be a Page Access Token. You need a User Access Token with pages_manage_metadata permission. Please generate a User Access Token in Graph API Explorer.');
+        }
+        
         throw new Error(`Could not fetch Facebook pages: ${pagesError.error?.message || 'Pages access failed'}`);
       }
       
