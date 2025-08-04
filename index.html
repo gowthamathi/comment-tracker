@@ -364,24 +364,32 @@
     <div id="instagramModal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Connect Instagram</h3>
+                <h3>Connect Instagram Business Account</h3>
                 <button class="modal-close" id="closeInstagramModal">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="modal-body">
+                <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 12px; margin-bottom: 16px;">
+                    <strong>⚠️ Requirements:</strong>
+                    <ul style="margin: 8px 0 0 0; padding-left: 20px; font-size: 14px;">
+                        <li>Instagram <strong>Business</strong> account (not Personal)</li>
+                        <li>Connected to a Facebook Page</li>
+                        <li>Facebook access token with <code>instagram_basic</code> and <code>instagram_manage_comments</code> permissions</li>
+                    </ul>
+                </div>
                 <div class="form-group">
                     <label class="form-label">Account Name (Optional)</label>
-                    <input type="text" class="form-control" id="instagramAccountName" placeholder="Enter a name for this account (e.g., 'Personal', 'Business')">
+                    <input type="text" class="form-control" id="instagramAccountName" placeholder="Enter a name for this account (e.g., 'Store Account', 'Brand Page')">
                     <small style="color: var(--color-text-secondary); font-size: var(--font-size-xs); margin-top: 4px; display: block;">
                         This helps you identify multiple accounts
                     </small>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Instagram Access Token</label>
-                    <input type="text" class="form-control" id="instagramToken" placeholder="Enter your Instagram access token">
+                    <label class="form-label">Facebook Access Token</label>
+                    <input type="text" class="form-control" id="instagramToken" placeholder="Enter your Facebook access token with Instagram permissions">
                     <small style="color: var(--color-text-secondary); font-size: var(--font-size-xs); margin-top: 4px; display: block;">
-                        Get your token from <a href="https://developers.facebook.com/docs/instagram-basic-display-api" target="_blank">Instagram Basic Display API</a>
+                        Get your token from <a href="https://developers.facebook.com/tools/explorer/" target="_blank">Facebook Graph API Explorer</a> with instagram_basic + instagram_manage_comments permissions
                     </small>
                 </div>
                 <div class="form-group">

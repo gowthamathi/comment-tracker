@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Facebook Ads Integration</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .debug-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 8px; }
+        .debug-log { background: #f8f9fa; padding: 10px; border-radius: 4px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+        button { margin: 5px; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        input { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .warning { color: #ffc107; }
+        .info { color: #17a2b8; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Facebook Ads Debug Tool</h1>
+    <p>This tool helps debug why Facebook ad comments might not be showing up.</p>
+    
+    <div class="debug-section">
+        <h2>📝 Setup</h2>
+        <input type="text" id="accessToken" placeholder="Enter your Facebook Access Token">
+        <input type="text" id="pageId" placeholder="Enter your Facebook Page ID">
+        <button onclick="testFacebookAds()">🧪 Test Facebook Ads Integration</button>
+        <button onclick="clearDebugLog()">🗑️ Clear Log</button>
+    </div>
+
+    <div class="debug-section">
+        <h2>📊 Debug Output</h2>
+        <div id="debugLog" class="debug-log">Ready to test Facebook ads integration...</div>
+    </div>
+
+    <div class="debug-section">
+        <h2>📋 Requirements Checklist</h2>
+        <ul>
+            <li>✅ Valid Facebook Access Token with required permissions</li>
+            <li>✅ Facebook Page ID that you have admin access to</li>
+            <li>🔍 <strong>Required Permissions:</strong>
+                <ul>
+                    <li><code>pages_read_engagement</code> - Read page posts and comments</li>
+                    <li><code>ads_read</code> - Read ads and ad accounts (most important for ad comments)</li>
+                    <li><code>pages_manage_posts</code> - Manage page posts</li>
+                </ul>
+            </li>
+            <li>📢 <strong>Active Facebook Ads:</strong> You need to have active or recent ads to see comments</li>
+        </ul>
+    </div>
+
+    <script src="api.js"></script>
+    <script>
+        function log(message, type = 'info') {
+            const debugLog = document.getElementById('debugLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'success' ? 'success' : type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'info';
+            debugLog.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            debugLog.scrollTop = debugLog.scrollHeight;
+        }
+
+        function clearDebugLog() {
+            document.getElementById('debugLog').innerHTML = 'Debug log cleared...\n';
+        }
+
+        async function testFacebookAds() {
+            const accessToken = document.getElementById('accessToken').value.trim();
+            const pageId = document.getElementById('pageId').value.trim();
+
+            if (!accessToken || !pageId) {
+                log('❌ Please enter both Access Token and Page ID', 'error');
+                return;
+            }
+
+            log('🚀 Starting Facebook Ads Debug Test...', 'info');
+            log(`Page ID: ${pageId}`, 'info');
+            log(`Token: ${accessToken.substring(0, 20)}...`, 'info');
+
+            try {
+                // Test 1: Validate access token
+                log('\n📋 Test 1: Validating access token...', 'info');
+                const tokenResponse = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${accessToken}`);
+                if (tokenResponse.ok) {
+                    const tokenData = await tokenResponse.json();
+                    log(`✅ Token valid for user: ${tokenData.name} (${tokenData.id})`, 'success');
+                } else {
+                    const tokenError = await tokenResponse.json();
+                    log(`❌ Token validation failed: ${tokenError.error?.message}`, 'error');
+                    return;
+                }
+
+                // Test 2: Validate page access
+                log('\n📋 Test 2: Validating page access...', 'info');
+                const pageResponse = await fetch(`https://graph.facebook.com/v18.0/${pageId}?fields=id,name&access_token=${accessToken}`);
+                if (pageResponse.ok) {
+                    const pageData = await pageResponse.json();
+                    log(`✅ Page access confirmed: ${pageData.name}`, 'success');
+                } else {
+                    const pageError = await pageResponse.json();
+                    log(`❌ Page access failed: ${pageError.error?.message}`, 'error');
+                    return;
+                }
+
+                // Test 3: Check ad permissions
+                log('\n📋 Test 3: Checking ad account permissions...', 'info');
+                const adAccountResponse = await fetch(`https://graph.facebook.com/v18.0/me/adaccounts?fields=id,name,account_status&access_token=${accessToken}`);
+                if (adAccountResponse.ok) {
+                    const adAccountData = await adAccountResponse.json();
+                    log(`✅ Found ${adAccountData.data?.length || 0} ad accounts`, 'success');
+                    adAccountData.data?.forEach(account => {
+                        log(`  📊 Ad Account: ${account.name} (${account.id}) - Status: ${account.account_status}`, 'info');
+                    });
+                } else {
+                    const adAccountError = await adAccountResponse.json();
+                    log(`⚠️ Ad accounts access failed: ${adAccountError.error?.message}`, 'warning');
+                    log('This might mean you need ads_read permission', 'warning');
+                }
+
+                // Test 4: Try to fetch page ads directly
+                log('\n📋 Test 4: Fetching ads directly from page...', 'info');
+                const pageAdsResponse = await fetch(`https://graph.facebook.com/v18.0/${pageId}/ads?fields=id,name,status,creative{object_story_id,effective_object_story_id}&access_token=${accessToken}`);
+                if (pageAdsResponse.ok) {
+                    const pageAdsData = await pageAdsResponse.json();
+                    log(`✅ Found ${pageAdsData.data?.length || 0} ads directly from page`, 'success');
+                    pageAdsData.data?.forEach(ad => {
+                        const storyId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id;
+                        log(`  📢 Ad: ${ad.name} (${ad.id}) - Status: ${ad.status} - Story: ${storyId}`, 'info');
+                    });
+                } else {
+                    const pageAdsError = await pageAdsResponse.json();
+                    log(`⚠️ Page ads access failed: ${pageAdsError.error?.message}`, 'warning');
+                }
+
+                // Test 5: Try promoted posts
+                log('\n📋 Test 5: Checking promoted posts...', 'info');
+                const promotedResponse = await fetch(`https://graph.facebook.com/v18.0/${pageId}/promotable_posts?fields=id,message,is_published&access_token=${accessToken}`);
+                if (promotedResponse.ok) {
+                    const promotedData = await promotedResponse.json();
+                    log(`✅ Found ${promotedData.data?.length || 0} promotable posts`, 'success');
+                    promotedData.data?.forEach(post => {
+                        log(`  📝 Post: ${post.message?.substring(0, 50)}... (${post.id}) - Published: ${post.is_published}`, 'info');
+                    });
+                } else {
+                    const promotedError = await promotedResponse.json();
+                    log(`⚠️ Promoted posts access failed: ${promotedError.error?.message}`, 'warning');
+                }
+
+                // Test 6: Use the actual API class
+                log('\n📋 Test 6: Testing with actual API class...', 'info');
+                const api = new SocialMediaAPI();
+                
+                // Connect Facebook first
+                const connectResult = await api.connectFacebook(accessToken, pageId, 'Debug Test Account');
+                if (connectResult.success) {
+                    log(`✅ API connection successful: ${connectResult.message}`, 'success');
+                    
+                    // Try to fetch comments
+                    try {
+                        const comments = await api.fetchFacebookComments();
+                        const adComments = comments.filter(c => c.type === 'ad_comment' || c.type === 'promoted_post_comment');
+                        log(`✅ API fetch successful: ${comments.length} total comments, ${adComments.length} ad comments`, 'success');
+                        
+                        if (adComments.length > 0) {
+                            log('🎉 SUCCESS: Ad comments are working!', 'success');
+                            adComments.forEach(comment => {
+                                log(`  💬 Ad Comment: "${comment.text.substring(0, 50)}..." by ${comment.author}`, 'success');
+                            });
+                        } else {
+                            log('⚠️ No ad comments found. This could mean:', 'warning');
+                            log('  - No active ads with comments', 'warning');
+                            log('  - Missing ads_read permission', 'warning');
+                            log('  - Ads are not associated with this page', 'warning');
+                        }
+                    } catch (fetchError) {
+                        log(`❌ API fetch failed: ${fetchError.message}`, 'error');
+                    }
+                } else {
+                    log(`❌ API connection failed: ${connectResult.message}`, 'error');
+                }
+
+                log('\n🏁 Debug test completed!', 'info');
+
+            } catch (error) {
+                log(`❌ Debug test failed with exception: ${error.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

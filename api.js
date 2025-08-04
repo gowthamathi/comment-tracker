@@ -128,44 +128,97 @@ class SocialMediaAPI {
     }
   }
 
-  // Instagram Integration
+  // Instagram Integration (using Instagram Graph API for Business accounts)
   async connectInstagram(accessToken, userId, accountName = null) {
     try {
-      console.log('Attempting Instagram connection...');
+      console.log('Attempting Instagram Business account connection...');
       
-      // Validate token and user ID
-      const response = await fetch(`https://graph.instagram.com/v18.0/${userId}?fields=id,username&access_token=${accessToken}`);
+      // First, validate the access token by getting user info
+      const userResponse = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${accessToken}`);
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Instagram validation failed:', errorData);
-        
-        if (response.status === 404) {
-          throw new Error('Instagram user not found. Please check your User ID.');
-        } else if (response.status === 403) {
-          throw new Error('Access denied to Instagram account. Please ensure you have the correct permissions.');
-        } else {
-          throw new Error(`Instagram validation failed: ${errorData.error?.message || 'Invalid credentials'}`);
-        }
+      if (!userResponse.ok) {
+        const userError = await userResponse.json().catch(() => ({}));
+        console.error('Facebook token validation failed:', userError);
+        throw new Error(`Invalid access token: ${userError.error?.message || 'Token validation failed'}`);
       }
       
-      const userData = await response.json();
-      console.log('Instagram validation successful:', userData.username);
+      // Get Instagram Business accounts connected to this Facebook account
+      const pagesResponse = await fetch(`https://graph.facebook.com/v18.0/me/accounts?fields=id,name,instagram_business_account{id,username,name,profile_picture_url}&access_token=${accessToken}`);
+      
+      if (!pagesResponse.ok) {
+        const pagesError = await pagesResponse.json().catch(() => ({}));
+        console.error('Pages fetch failed:', pagesError);
+        throw new Error(`Could not fetch Facebook pages: ${pagesError.error?.message || 'Pages access failed'}`);
+      }
+      
+      const pagesData = await pagesResponse.json();
+      console.log('Found Facebook pages:', pagesData.data?.length || 0);
+      
+      // Find Instagram Business accounts
+      let instagramAccounts = [];
+      if (pagesData.data) {
+        pagesData.data.forEach(page => {
+          if (page.instagram_business_account) {
+            instagramAccounts.push({
+              pageId: page.id,
+              pageName: page.name,
+              igId: page.instagram_business_account.id,
+              igUsername: page.instagram_business_account.username,
+              igName: page.instagram_business_account.name,
+              profilePicture: page.instagram_business_account.profile_picture_url
+            });
+          }
+        });
+      }
+      
+      if (instagramAccounts.length === 0) {
+        throw new Error('No Instagram Business accounts found. Please ensure you have:\n1. An Instagram Business account\n2. Connected it to a Facebook Page\n3. Proper permissions (instagram_basic, pages_read_engagement)');
+      }
+      
+      // If userId is provided, find that specific account
+      let selectedAccount = null;
+      if (userId) {
+        selectedAccount = instagramAccounts.find(acc => acc.igId === userId);
+        if (!selectedAccount) {
+          throw new Error(`Instagram Business account with ID ${userId} not found. Available accounts: ${instagramAccounts.map(acc => `${acc.igUsername} (${acc.igId})`).join(', ')}`);
+        }
+      } else {
+        // Use the first account if no specific ID provided
+        selectedAccount = instagramAccounts[0];
+      }
+      
+      console.log('Instagram validation successful:', selectedAccount.igUsername);
+      
+      // Test permissions by trying to fetch media
+      try {
+        const testResponse = await fetch(`https://graph.facebook.com/v18.0/${selectedAccount.igId}/media?fields=id,media_type&limit=1&access_token=${accessToken}`);
+        if (!testResponse.ok) {
+          const testError = await testResponse.json().catch(() => ({}));
+          throw new Error(`Instagram API test failed: ${testError.error?.message || 'Permission denied'}. Please ensure you have instagram_basic and instagram_manage_comments permissions.`);
+        }
+      } catch (permError) {
+        console.error('Instagram permissions test failed:', permError);
+        throw new Error(`Instagram permissions test failed: ${permError.message}`);
+      }
       
       // Add to accounts array
       const accountId = `ig_${Date.now()}`;
       const newAccount = {
         id: accountId,
-        name: accountName || `@${userData.username}`,
-        username: userData.username,
+        name: accountName || `@${selectedAccount.igUsername}`,
+        username: selectedAccount.igUsername,
+        displayName: selectedAccount.igName,
         connected: true,
         accessToken: accessToken,
-        userId: userId,
+        userId: selectedAccount.igId,
+        pageId: selectedAccount.pageId,
+        pageName: selectedAccount.pageName,
+        profilePicture: selectedAccount.profilePicture,
         lastSync: new Date().toISOString()
       };
       
       // Check if account already exists
-      const existingIndex = this.platforms.instagram.accounts.findIndex(acc => acc.userId === userId);
+      const existingIndex = this.platforms.instagram.accounts.findIndex(acc => acc.userId === selectedAccount.igId);
       if (existingIndex >= 0) {
         this.platforms.instagram.accounts[existingIndex] = newAccount;
       } else {
@@ -174,7 +227,13 @@ class SocialMediaAPI {
       
       this.saveCredentials();
       
-      return { success: true, message: `Instagram connected successfully! Account: @${userData.username}`, accountId };
+      const availableAccountsMsg = instagramAccounts.length > 1 ? ` (${instagramAccounts.length} accounts available)` : '';
+      return { 
+        success: true, 
+        message: `Instagram Business account connected successfully! Account: @${selectedAccount.igUsername}${availableAccountsMsg}`, 
+        accountId,
+        availableAccounts: instagramAccounts
+      };
     } catch (error) {
       console.error('Instagram connection error:', error);
       return { success: false, message: error.message };
@@ -277,15 +336,20 @@ class SocialMediaAPI {
     return { success: false, message: 'Platform not found' };
   }
 
-  // Helper method to fetch ad comments
+  // Helper method to fetch ad comments with detailed debugging
   async fetchAdComments(storyId, ad, accessToken, allComments, account, pageId) {
     try {
-      const adCommentsResponse = await fetch(`https://graph.facebook.com/v18.0/${storyId}/comments?fields=id,message,from,created_time,permalink_url&access_token=${accessToken}`);
+      console.log(`🔍 Fetching comments for story ${storyId} (ad: ${ad.name || ad.id})...`);
+      const adCommentsResponse = await fetch(`https://graph.facebook.com/v18.0/${storyId}/comments?fields=id,message,from,created_time,permalink_url,like_count&access_token=${accessToken}`);
       
+      console.log(`Ad comments response status: ${adCommentsResponse.status}`);
       if (adCommentsResponse.ok) {
         const adCommentsData = await adCommentsResponse.json();
+        console.log(`Ad comments response:`, JSON.stringify(adCommentsData, null, 2));
         
+        const commentsBefore = allComments.length;
         adCommentsData.data?.forEach(comment => {
+          console.log(`Adding ad comment: ${comment.message?.substring(0, 50)}... by ${comment.from?.name}`);
           allComments.push({
             id: `fb_ad_${comment.id}`,
             platform: 'facebook',
@@ -304,17 +368,22 @@ class SocialMediaAPI {
             type: 'ad_comment',
             pageId: pageId,
             accountId: account.id,
-            accountName: account.name
+            accountName: account.name,
+            likeCount: comment.like_count || 0
           });
         });
         
-        console.log(`Found ${adCommentsData.data?.length || 0} comments on ad ${ad.name || ad.id}`);
+        const commentsAdded = allComments.length - commentsBefore;
+        console.log(`✅ Successfully added ${commentsAdded} comments for ad ${ad.name || ad.id} (story ${storyId})`);
+        return commentsAdded;
       } else {
-        const errorData = await adCommentsResponse.json().catch(() => ({}));
-        console.log(`Could not fetch comments for ad ${ad.id}:`, errorData.error?.message || adCommentsResponse.status);
+        const errorText = await adCommentsResponse.text();
+        console.log(`❌ Could not fetch comments for ad ${ad.id} (story ${storyId}):`, adCommentsResponse.status, errorText);
+        return 0;
       }
     } catch (error) {
-      console.log(`Error fetching comments for ad ${ad.id}:`, error.message);
+      console.log(`❌ Exception fetching comments for ad ${ad.id} (story ${storyId}):`, error.message);
+      return 0;
     }
   }
 
@@ -424,95 +493,134 @@ class SocialMediaAPI {
           console.warn('Could not fetch visitor posts:', visitorError.message);
         }
         
-        // 3. Fetch ad comments using multiple approaches
-        console.log('Attempting to fetch ad comments...');
+        // 3. Fetch ad comments using multiple approaches with detailed debugging
+        console.log('=== STARTING AD COMMENTS FETCH ===');
+        console.log(`Account: ${account.name}, Page ID: ${pageId}`);
+        
+        let totalAdComments = 0;
         try {
           // Method 1: Try to get ads directly associated with the page
-          console.log('Trying to fetch ads directly from page...');
+          console.log('🔍 Method 1: Fetching ads directly from page...');
           try {
-            const pageAdsResponse = await fetch(`https://graph.facebook.com/v18.0/${pageId}/ads?fields=id,name,creative{object_story_id,effective_object_story_id}&access_token=${accessToken}`);
+            const pageAdsResponse = await fetch(`https://graph.facebook.com/v18.0/${pageId}/ads?fields=id,name,status,creative{object_story_id,effective_object_story_id}&access_token=${accessToken}`);
             
+            console.log(`Page ads response status: ${pageAdsResponse.status}`);
             if (pageAdsResponse.ok) {
               const pageAdsData = await pageAdsResponse.json();
-              console.log(`Found ${pageAdsData.data?.length || 0} ads directly from page`);
+              console.log(`✅ Found ${pageAdsData.data?.length || 0} ads directly from page`);
+              console.log('Page ads data:', JSON.stringify(pageAdsData, null, 2));
               
               for (const ad of pageAdsData.data || []) {
+                console.log(`Processing ad: ${ad.name || ad.id}, Status: ${ad.status}`);
                 const storyId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id;
+                console.log(`Story ID for ad ${ad.id}: ${storyId}`);
                 if (storyId) {
+                  const commentsBefore = allComments.length;
                   await this.fetchAdComments(storyId, ad, accessToken, allComments, account, pageId);
+                  const commentsAdded = allComments.length - commentsBefore;
+                  totalAdComments += commentsAdded;
+                  console.log(`✅ Added ${commentsAdded} comments from ad ${ad.name || ad.id}`);
+                } else {
+                  console.log(`⚠️ No story ID found for ad ${ad.id}`);
                 }
               }
             } else {
-              console.log('Page ads endpoint not accessible, trying ad accounts...');
+              const errorText = await pageAdsResponse.text();
+              console.log('❌ Page ads endpoint error:', pageAdsResponse.status, errorText);
             }
           } catch (pageAdsError) {
-            console.log('Page ads method failed:', pageAdsError.message);
+            console.log('❌ Page ads method exception:', pageAdsError.message);
           }
           
-          // Method 2: Try ad accounts approach
-          console.log('Trying ad accounts approach...');
+          // Method 2: Try ad accounts approach with detailed logging
+          console.log('🔍 Method 2: Trying ad accounts approach...');
           try {
-            const adAccountResponse = await fetch(`https://graph.facebook.com/v18.0/me/adaccounts?fields=id,name&access_token=${accessToken}`);
+            const adAccountResponse = await fetch(`https://graph.facebook.com/v18.0/me/adaccounts?fields=id,name,account_status&access_token=${accessToken}`);
             
+            console.log(`Ad accounts response status: ${adAccountResponse.status}`);
             if (adAccountResponse.ok) {
               const adAccountData = await adAccountResponse.json();
-              console.log(`Found ${adAccountData.data?.length || 0} ad accounts`);
+              console.log(`✅ Found ${adAccountData.data?.length || 0} ad accounts`);
+              console.log('Ad accounts:', JSON.stringify(adAccountData, null, 2));
               
               for (const adAccount of adAccountData.data || []) {
-                console.log(`Checking ad account: ${adAccount.name || adAccount.id}`);
+                console.log(`🔎 Checking ad account: ${adAccount.name || adAccount.id} (Status: ${adAccount.account_status})`);
                 
                 // Get ads from this ad account that might be related to this page
-                const adsResponse = await fetch(`https://graph.facebook.com/v18.0/${adAccount.id}/ads?fields=id,name,creative{object_story_id,effective_object_story_id}&limit=50&access_token=${accessToken}`);
+                const adsResponse = await fetch(`https://graph.facebook.com/v18.0/${adAccount.id}/ads?fields=id,name,status,creative{object_story_id,effective_object_story_id}&limit=50&access_token=${accessToken}`);
                 
+                console.log(`Ads response for account ${adAccount.id}: ${adsResponse.status}`);
                 if (adsResponse.ok) {
                   const adsData = await adsResponse.json();
-                  console.log(`Found ${adsData.data?.length || 0} ads in account ${adAccount.name || adAccount.id}`);
+                  console.log(`✅ Found ${adsData.data?.length || 0} ads in account ${adAccount.name || adAccount.id}`);
                   
                   for (const ad of adsData.data || []) {
+                    console.log(`Processing ad: ${ad.name || ad.id}, Status: ${ad.status}`);
                     const storyId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id;
+                    console.log(`Story ID for ad ${ad.id}: ${storyId}`);
                     if (storyId) {
                       // Check if this ad story is related to our page
                       try {
-                        const storyResponse = await fetch(`https://graph.facebook.com/v18.0/${storyId}?fields=from&access_token=${accessToken}`);
+                        console.log(`Verifying story ${storyId} belongs to page ${pageId}...`);
+                        const storyResponse = await fetch(`https://graph.facebook.com/v18.0/${storyId}?fields=from,id&access_token=${accessToken}`);
                         if (storyResponse.ok) {
                           const storyData = await storyResponse.json();
+                          console.log(`Story data:`, JSON.stringify(storyData, null, 2));
                           if (storyData.from && storyData.from.id === pageId) {
+                            console.log(`✅ Story ${storyId} belongs to our page! Fetching comments...`);
+                            const commentsBefore = allComments.length;
                             await this.fetchAdComments(storyId, ad, accessToken, allComments, account, pageId);
+                            const commentsAdded = allComments.length - commentsBefore;
+                            totalAdComments += commentsAdded;
+                            console.log(`✅ Added ${commentsAdded} comments from ad account ad ${ad.name || ad.id}`);
+                          } else {
+                            console.log(`⚠️ Story ${storyId} does not belong to our page (belongs to ${storyData.from?.id})`);
                           }
+                        } else {
+                          const storyErrorText = await storyResponse.text();
+                          console.log(`❌ Could not fetch story ${storyId}:`, storyResponse.status, storyErrorText);
                         }
                       } catch (storyError) {
-                        console.log(`Could not verify story ${storyId} for page ${pageId}`);
+                        console.log(`❌ Exception verifying story ${storyId}:`, storyError.message);
                       }
+                    } else {
+                      console.log(`⚠️ No story ID found for ad ${ad.id}`);
                     }
                   }
                 } else {
-                  const adsError = await adsResponse.json().catch(() => ({}));
-                  console.log(`Could not fetch ads from account ${adAccount.id}:`, adsError.error?.message || adsResponse.status);
+                  const adsErrorText = await adsResponse.text();
+                  console.log(`❌ Could not fetch ads from account ${adAccount.id}:`, adsResponse.status, adsErrorText);
                 }
               }
             } else {
-              const adAccountError = await adAccountResponse.json().catch(() => ({}));
-              console.log('Could not fetch ad accounts:', adAccountError.error?.message || adAccountResponse.status);
+              const adAccountErrorText = await adAccountResponse.text();
+              console.log('❌ Could not fetch ad accounts:', adAccountResponse.status, adAccountErrorText);
             }
           } catch (adAccountError) {
-            console.warn('Ad accounts method failed:', adAccountError.message);
+            console.warn('❌ Ad accounts method exception:', adAccountError.message);
           }
           
           // Method 3: Try to get promoted posts (page posts that became ads)
-          console.log('Trying promoted posts approach...');
+          console.log('🔍 Method 3: Trying promoted posts approach...');
           try {
-            const promotedPostsResponse = await fetch(`https://graph.facebook.com/v18.0/${pageId}/promotable_posts?fields=id,permalink_url,message&access_token=${accessToken}`);
+            const promotedPostsResponse = await fetch(`https://graph.facebook.com/v18.0/${pageId}/promotable_posts?fields=id,permalink_url,message,is_published&access_token=${accessToken}`);
             
+            console.log(`Promoted posts response status: ${promotedPostsResponse.status}`);
             if (promotedPostsResponse.ok) {
               const promotedData = await promotedPostsResponse.json();
-              console.log(`Found ${promotedData.data?.length || 0} promotable posts`);
+              console.log(`✅ Found ${promotedData.data?.length || 0} promotable posts`);
+              console.log('Promoted posts data:', JSON.stringify(promotedData, null, 2));
               
               for (const post of promotedData.data || []) {
+                console.log(`Processing promoted post: ${post.id}`);
                 const commentsResponse = await fetch(`https://graph.facebook.com/v18.0/${post.id}/comments?fields=id,message,from,created_time,permalink_url&access_token=${accessToken}`);
                 
+                console.log(`Comments response for post ${post.id}: ${commentsResponse.status}`);
                 if (commentsResponse.ok) {
                   const commentsData = await commentsResponse.json();
+                  console.log(`✅ Found ${commentsData.data?.length || 0} comments on promoted post ${post.id}`);
                   
+                  const commentsBefore = allComments.length;
                   commentsData.data?.forEach(comment => {
                     allComments.push({
                       id: `fb_promoted_${comment.id}`,
@@ -534,20 +642,30 @@ class SocialMediaAPI {
                       accountName: account.name
                     });
                   });
-                  
-                  console.log(`Found ${commentsData.data?.length || 0} comments on promoted post ${post.id}`);
+                  const commentsAdded = allComments.length - commentsBefore;
+                  totalAdComments += commentsAdded;
+                  console.log(`✅ Added ${commentsAdded} comments from promoted post ${post.id}`);
+                } else {
+                  const commentsErrorText = await commentsResponse.text();
+                  console.log(`❌ Could not fetch comments for promoted post ${post.id}:`, commentsResponse.status, commentsErrorText);
                 }
               }
+            } else {
+              const promotedErrorText = await promotedPostsResponse.text();
+              console.log('❌ Promoted posts method error:', promotedPostsResponse.status, promotedErrorText);
             }
           } catch (promotedError) {
-            console.log('Promoted posts method failed:', promotedError.message);
+            console.log('❌ Promoted posts method exception:', promotedError.message);
           }
           
+          console.log(`=== AD COMMENTS SUMMARY for ${account.name} ===`);
+          console.log(`Total ad-related comments found: ${totalAdComments}`);
           const adCommentsCount = allComments.filter(c => (c.type === 'ad_comment' || c.type === 'promoted_post_comment') && c.accountId === account.id).length;
-          console.log(`Total ad-related comments found for ${account.name}: ${adCommentsCount}`);
+          console.log(`Verified count in array: ${adCommentsCount}`);
+          console.log('=== END AD COMMENTS SUMMARY ===');
           
         } catch (adError) {
-          console.error(`All ad comment fetching methods failed for ${account.name}:`, adError.message);
+          console.error(`❌ All ad comment fetching methods failed for ${account.name}:`, adError.message);
         }
         
         // Update last sync time for this account
@@ -575,7 +693,7 @@ class SocialMediaAPI {
     return allComments;
   }
 
-  // Fetch Instagram Comments from all connected accounts
+  // Fetch Instagram Comments from all connected accounts (using Instagram Graph API)
   async fetchInstagramComments() {
     const instagramAccounts = this.platforms.instagram.accounts.filter(acc => acc.connected);
     if (instagramAccounts.length === 0) {
@@ -589,8 +707,8 @@ class SocialMediaAPI {
         console.log(`Fetching Instagram comments for ${account.name}...`);
         const { accessToken, userId } = account;
         
-        // Updated Instagram API call with better fields
-        const response = await fetch(`https://graph.instagram.com/v18.0/${userId}/media?fields=id,media_type,media_url,permalink,timestamp,comments{id,text,username,timestamp}&access_token=${accessToken}`);
+        // Use Instagram Graph API (Facebook Graph API for Instagram Business)
+        const response = await fetch(`https://graph.facebook.com/v18.0/${userId}/media?fields=id,media_type,media_url,permalink,timestamp,caption,comments{id,text,username,timestamp,like_count,replies{id,text,username,timestamp}}&limit=50&access_token=${accessToken}`);
         
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
@@ -601,7 +719,9 @@ class SocialMediaAPI {
             this.saveCredentials();
             throw new Error('Instagram access token expired. Please reconnect your account.');
           } else if (response.status === 403) {
-            throw new Error('Access denied to Instagram account. Please check your permissions.');
+            throw new Error('Access denied to Instagram Business account. Please ensure you have instagram_basic and instagram_manage_comments permissions.');
+          } else if (response.status === 400 && errorData.error?.code === 100) {
+            throw new Error('Instagram Business account access failed. Please ensure your Instagram account is connected to a Facebook Page and has Business account status.');
           } else {
             throw new Error(`Instagram API error: ${errorData.error?.message || response.status}`);
           }
@@ -631,8 +751,34 @@ class SocialMediaAPI {
                   commentUrl: media.permalink, // Instagram doesn't provide direct comment URLs
                   type: 'media_comment',
                   accountId: account.id,
-                  accountName: account.name
+                  accountName: account.name,
+                  likeCount: comment.like_count || 0
                 });
+                
+                // Add replies as separate comments
+                if (comment.replies && comment.replies.data) {
+                  comment.replies.data.forEach(reply => {
+                    allComments.push({
+                      id: `ig_reply_${reply.id}`,
+                      platform: 'instagram',
+                      text: reply.text || '',
+                      author: reply.username || 'Unknown',
+                      sentiment: this.analyzeSentiment(reply.text || ''),
+                      category: this.categorizeComment(reply.text || ''),
+                      priority: this.determinePriority(reply.text || ''),
+                      timestamp: reply.timestamp || new Date().toISOString(),
+                      responded: false,
+                      originalId: reply.id,
+                      postId: media.id,
+                      postUrl: media.permalink,
+                      commentUrl: media.permalink,
+                      type: 'reply_comment',
+                      accountId: account.id,
+                      accountName: account.name,
+                      parentCommentId: comment.id
+                    });
+                  });
+                }
               });
             }
           });
@@ -654,7 +800,9 @@ class SocialMediaAPI {
     }
     
     this.saveCredentials();
-    console.log(`Instagram sync completed: found ${allComments.length} total comments from ${instagramAccounts.length} accounts`);
+    const commentCount = allComments.filter(c => c.type === 'media_comment').length;
+    const replyCount = allComments.filter(c => c.type === 'reply_comment').length;
+    console.log(`Instagram sync completed: found ${commentCount} comments and ${replyCount} replies from ${instagramAccounts.length} accounts`);
     
     return allComments;
   }
