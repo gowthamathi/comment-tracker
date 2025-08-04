@@ -290,6 +290,7 @@ class SupernovaApp {
         case 'facebook':
           const fbToken = document.getElementById('facebookToken').value.trim();
           const fbPageId = document.getElementById('facebookPageId').value.trim();
+          const fbAccountName = document.getElementById('facebookAccountName').value.trim();
           
           if (!fbToken) {
             this.showToast('Please enter your Facebook access token', 'error');
@@ -307,12 +308,13 @@ class SupernovaApp {
           }
           
           console.log('Attempting Facebook connection...');
-          result = await this.api.connectFacebook(fbToken, fbPageId);
+          result = await this.api.connectFacebook(fbToken, fbPageId, fbAccountName);
           break;
           
         case 'instagram':
           const igToken = document.getElementById('instagramToken').value.trim();
           const igUserId = document.getElementById('instagramUserId').value.trim();
+          const igAccountName = document.getElementById('instagramAccountName').value.trim();
           
           if (!igToken) {
             this.showToast('Please enter your Instagram access token', 'error');
@@ -324,13 +326,14 @@ class SupernovaApp {
           }
           
           console.log('Attempting Instagram connection...');
-          result = await this.api.connectInstagram(igToken, igUserId);
+          result = await this.api.connectInstagram(igToken, igUserId, igAccountName);
           break;
           
         case 'youtube':
           const ytToken = document.getElementById('youtubeToken').value.trim();
           const ytChannelId = document.getElementById('youtubeChannelId').value.trim();
           const ytApiKey = document.getElementById('youtubeApiKey').value.trim();
+          const ytAccountName = document.getElementById('youtubeAccountName').value.trim();
           
           if (!ytToken) {
             this.showToast('Please enter your YouTube access token', 'error');
@@ -346,7 +349,7 @@ class SupernovaApp {
           }
           
           console.log('Attempting YouTube connection...');
-          result = await this.api.connectYouTube(ytToken, ytChannelId, ytApiKey);
+          result = await this.api.connectYouTube(ytToken, ytChannelId, ytApiKey, ytAccountName);
           break;
       }
 
@@ -403,10 +406,14 @@ class SupernovaApp {
       const btn = document.getElementById(`${platform}-btn`);
       
       if (statusBadge && btn) {
-        if (status.connected) {
-          statusBadge.textContent = 'Connected';
+        if (status.connected && status.accountCount > 0) {
+          if (status.accountCount === 1) {
+            statusBadge.textContent = `Connected (${status.connectedAccounts[0].name})`;
+          } else {
+            statusBadge.textContent = `Connected (${status.accountCount} accounts)`;
+          }
           statusBadge.className = 'status-badge connected';
-          btn.textContent = 'Disconnect';
+          btn.textContent = status.accountCount === 1 ? 'Disconnect' : 'Manage';
           btn.className = 'btn btn--outline';
           if (statsDiv) statsDiv.style.display = 'block';
         } else {
@@ -581,6 +588,9 @@ class SupernovaApp {
           </div>
           <div class="comment-author" style="font-size: 11px; color: var(--color-text-secondary); margin-top: 4px;">
             by ${comment.author}
+            ${comment.commentUrl ? `<a href="${comment.commentUrl}" target="_blank" class="comment-link" title="View original comment" style="margin-left: 8px; color: var(--color-primary);"><i class="fas fa-external-link-alt"></i></a>` : ''}
+            ${comment.postUrl ? `<a href="${comment.postUrl}" target="_blank" class="post-link" title="View original post" style="margin-left: 4px; color: var(--color-secondary);"><i class="fas fa-link"></i></a>` : ''}
+            ${comment.type ? `<span class="comment-type-badge" title="Comment type: ${comment.type}" style="margin-left: 8px; font-size: 9px; padding: 2px 4px; background: var(--color-secondary); color: white; border-radius: 3px;">${this.getCommentTypeBadge(comment.type)}</span>` : ''}
           </div>
         </div>
         <div class="table-cell">
@@ -1196,6 +1206,17 @@ class SupernovaApp {
     return icons[platform] || 'fas fa-globe';
   }
 
+  getCommentTypeBadge(type) {
+    const types = {
+      post_comment: 'POST',
+      visitor_comment: 'PAGE',
+      ad_comment: 'AD',
+      media_comment: 'MEDIA',
+      video_comment: 'VIDEO'
+    };
+    return types[type] || 'OTHER';
+  }
+
   showToast(message, type = 'info') {
     // Remove any existing toasts to prevent stacking
     const existingToasts = document.querySelectorAll('.toast');
@@ -1267,14 +1288,17 @@ class SupernovaApp {
   clearConnectionForm(platform) {
     switch (platform) {
       case 'facebook':
+        document.getElementById('facebookAccountName').value = '';
         document.getElementById('facebookToken').value = '';
         document.getElementById('facebookPageId').value = '';
         break;
       case 'instagram':
+        document.getElementById('instagramAccountName').value = '';
         document.getElementById('instagramToken').value = '';
         document.getElementById('instagramUserId').value = '';
         break;
       case 'youtube':
+        document.getElementById('youtubeAccountName').value = '';
         document.getElementById('youtubeToken').value = '';
         document.getElementById('youtubeChannelId').value = '';
         document.getElementById('youtubeApiKey').value = '';
