@@ -24,11 +24,27 @@ class SocialMediaAPI {
     if (stored) {
       try {
         const credentials = JSON.parse(stored);
-        this.platforms = { ...this.platforms, ...credentials };
+        // Merge credentials while ensuring accounts arrays exist
+        Object.keys(credentials).forEach(platform => {
+          if (this.platforms[platform]) {
+            this.platforms[platform] = {
+              ...this.platforms[platform],
+              ...credentials[platform],
+              accounts: credentials[platform].accounts || []
+            };
+          }
+        });
       } catch (error) {
         console.error('Error loading stored credentials:', error);
       }
     }
+    
+    // Ensure all platforms have accounts arrays
+    Object.keys(this.platforms).forEach(platform => {
+      if (!this.platforms[platform].accounts) {
+        this.platforms[platform].accounts = [];
+      }
+    });
   }
 
   // Save credentials to localStorage
@@ -965,10 +981,15 @@ class SocialMediaAPI {
   // Get platform connection status
   getPlatformStatus(platform) {
     if (!this.platforms[platform]) {
-      return { connected: false, accounts: [] };
+      return { connected: false, accounts: [], connectedAccounts: [], accountCount: 0 };
     }
     
-    const connectedAccounts = this.platforms[platform].accounts.filter(acc => acc.connected);
+    // Ensure accounts array exists
+    if (!this.platforms[platform].accounts) {
+      this.platforms[platform].accounts = [];
+    }
+    
+    const connectedAccounts = this.platforms[platform].accounts.filter(acc => acc && acc.connected);
     return {
       connected: connectedAccounts.length > 0,
       accounts: this.platforms[platform].accounts,

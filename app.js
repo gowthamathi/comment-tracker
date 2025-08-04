@@ -23,6 +23,12 @@ class SupernovaApp {
   init() {
     console.log('Initializing Supernova Comment Monitor...');
     try {
+      // Ensure API is properly initialized
+      if (!this.api || typeof this.api.getPlatformStatus !== 'function') {
+        console.log('Reinitializing API...');
+        this.api = new SocialMediaAPI();
+      }
+      
       this.setupEventListeners();
       this.updatePlatformStatus();
       this.refreshDashboard();
@@ -32,6 +38,15 @@ class SupernovaApp {
     } catch (error) {
       console.error('Failed to initialize application:', error);
       this.showToast('Failed to initialize application: ' + error.message, 'error');
+      
+      // Try to recover by reinitializing with defaults
+      try {
+        console.log('Attempting recovery...');
+        this.api = new SocialMediaAPI();
+        this.updatePlatformStatus();
+      } catch (recoveryError) {
+        console.error('Recovery failed:', recoveryError);
+      }
     }
   }
 
@@ -400,28 +415,43 @@ class SupernovaApp {
     const platforms = ['facebook', 'instagram', 'youtube'];
     
     platforms.forEach(platform => {
-      const status = this.api.getPlatformStatus(platform);
-      const statusBadge = document.getElementById(`${platform}-status`);
-      const statsDiv = document.getElementById(`${platform}-stats`);
-      const btn = document.getElementById(`${platform}-btn`);
-      
-      if (statusBadge && btn) {
-        if (status.connected && status.accountCount > 0) {
-          if (status.accountCount === 1) {
-            statusBadge.textContent = `Connected (${status.connectedAccounts[0].name})`;
+      try {
+        const status = this.api.getPlatformStatus(platform);
+        const statusBadge = document.getElementById(`${platform}-status`);
+        const statsDiv = document.getElementById(`${platform}-stats`);
+        const btn = document.getElementById(`${platform}-btn`);
+        
+        if (statusBadge && btn) {
+          if (status.connected && status.accountCount > 0) {
+            if (status.accountCount === 1) {
+              const firstAccount = status.connectedAccounts && status.connectedAccounts[0];
+              const accountName = firstAccount ? firstAccount.name : 'Account';
+              statusBadge.textContent = `Connected (${accountName})`;
+            } else {
+              statusBadge.textContent = `Connected (${status.accountCount} accounts)`;
+            }
+            statusBadge.className = 'status-badge connected';
+            btn.textContent = status.accountCount === 1 ? 'Disconnect' : 'Manage';
+            btn.className = 'btn btn--outline';
+            if (statsDiv) statsDiv.style.display = 'block';
           } else {
-            statusBadge.textContent = `Connected (${status.accountCount} accounts)`;
+            statusBadge.textContent = 'Not Connected';
+            statusBadge.className = 'status-badge pending';
+            btn.textContent = 'Connect';
+            btn.className = 'btn btn--secondary';
+            if (statsDiv) statsDiv.style.display = 'none';
           }
-          statusBadge.className = 'status-badge connected';
-          btn.textContent = status.accountCount === 1 ? 'Disconnect' : 'Manage';
-          btn.className = 'btn btn--outline';
-          if (statsDiv) statsDiv.style.display = 'block';
-        } else {
+        }
+      } catch (error) {
+        console.error(`Error updating ${platform} status:`, error);
+        // Set default state on error
+        const statusBadge = document.getElementById(`${platform}-status`);
+        const btn = document.getElementById(`${platform}-btn`);
+        if (statusBadge && btn) {
           statusBadge.textContent = 'Not Connected';
           statusBadge.className = 'status-badge pending';
           btn.textContent = 'Connect';
           btn.className = 'btn btn--secondary';
-          if (statsDiv) statsDiv.style.display = 'none';
         }
       }
     });
@@ -531,6 +561,11 @@ class SupernovaApp {
 
   // Apply filters to comments
   applyFilters() {
+    // Ensure comments is an array
+    if (!Array.isArray(this.comments)) {
+      this.comments = [];
+    }
+    
     let filtered = [...this.comments];
     
     // Apply category filter
